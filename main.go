@@ -70,10 +70,10 @@ func main() {
 	}
 	fileServer := http.FileServer(http.Dir(*rootDir))
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		var path string
 		var timer *prometheus.Timer
+		path := "notset"
 		if !*noMetrics {
-			path := req.URL.Path
+			path = req.URL.Path
 			timer = prometheus.NewTimer(httpDuration.WithLabelValues(site, path))
 		}
 		rw := NewResponseWriter(w)
