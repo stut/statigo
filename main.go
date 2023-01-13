@@ -34,24 +34,28 @@ var (
 			Name: "statigo_requests_total",
 			Help: "HTTP requests total.",
 		},
-		[]string{"path"})
+		[]string{"site", "path"})
 	responseStatus = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "statigo_status_total",
 			Help: "HTTP response status.",
 		},
-		[]string{"status"},
+		[]string{"site", "status"},
 	)
 	httpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "statigo_response_time_seconds",
 		Help: "Duration of HTTP requests.",
-	}, []string{"path"})
+	}, []string{"site", "path"})
 )
 
 func main() {
 	listenPort := os.Getenv("NOMAD_PORT_http")
 	if len(listenPort) == 0 {
 		listenPort = "3000"
+	}
+	site := os.Getenv("STATIGO_SITE")
+	if len(site) == 0 {
+		site = "notset"
 	}
 
 	listenAddr := flag.String("listen-addr", fmt.Sprintf(":%s", listenPort),
@@ -70,20 +74,21 @@ func main() {
 		var timer *prometheus.Timer
 		if !*noMetrics {
 			path := req.URL.Path
-			timer = prometheus.NewTimer(httpDuration.WithLabelValues(path))
+			timer = prometheus.NewTimer(httpDuration.WithLabelValues(site, path))
 		}
 		rw := NewResponseWriter(w)
 
 		fileServer.ServeHTTP(rw, req)
 
 		if !*noMetrics {
-			responseStatus.WithLabelValues(strconv.Itoa(rw.statusCode)).Inc()
-			httpRequests.WithLabelValues(path).Inc()
+			responseStatus.WithLabelValues(site, strconv.Itoa(rw.statusCode)).Inc()
+			httpRequests.WithLabelValues(site, path).Inc()
 			timer.ObserveDuration()
 		}
 	})
 
 	log.Printf("Statigo v%d", VERSION)
+	log.Printf("  Site: %s", site)
 	log.Printf("  Web root: %s", *rootDir)
 	log.Printf("  Listen addr: %s", *listenAddr)
 	if !*noMetrics {
