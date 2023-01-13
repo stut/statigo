@@ -4,5 +4,6 @@ An experiment to see how small a memory footprint we can get to for a simple sta
 
 Iterations:
 
-1. Basic static HTTP server.
+* v1: Basic static HTTP server.
+* v2: Added prometheus metrics.
 
