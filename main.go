@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	VERSION        = 2
+	VERSION        = 3
 	responseStatus = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "statigo_status_total",
@@ -63,13 +63,19 @@ func main() {
 
 	// Handle healthcheck requests. No metrics, no content.
 	http.HandleFunc(*healthUrl, func(w http.ResponseWriter, req *http.Request) {
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	// Set up the metrics endpoint.
 	if !*noMetrics {
 		http.Handle(*metricsUrl, promhttp.Handler())
 	}
+
+	// Handle attempts to get the .git folder.
+	http.HandleFunc("/.git", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write(notFoundContent)
+	})
 
 	// Static file server.
 	fileServer := http.FileServer(http.Dir(*rootDir))
