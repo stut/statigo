@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -15,7 +16,7 @@ import (
 )
 
 var (
-	VERSION        = 3
+	VERSION        = 4
 	responseStatus = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "statigo_status_total",
@@ -71,15 +72,16 @@ func main() {
 		http.Handle(*metricsUrl, promhttp.Handler())
 	}
 
-	// Handle attempts to get the .git folder.
-	http.HandleFunc("/.git", func(w http.ResponseWriter, req *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write(notFoundContent)
-	})
-
 	// Static file server.
 	fileServer := http.FileServer(http.Dir(*rootDir))
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		// Handle attempts to get hidden and forbidden files and folders.
+		if strings.HasPrefix(req.URL.Path, "/.") || strings.Contains(req.URL.Path, "/..") {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write(notFoundContent)
+			return
+		}
+
 		var timer *prometheus.Timer
 		var url string
 		if !*noMetrics {
