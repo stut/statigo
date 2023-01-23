@@ -2,8 +2,14 @@
 
 An experiment to see how small a memory footprint we can get to for a simple static HTTP server.
 
+As features grow it is getting bigger but the goal is still to keep it as small as possible.
+
+Docker images available on DockerHub: https://hub.docker.com/r/stut/statigo
+
 Iterations:
 
 * v1: Basic static HTTP server.
 * v2: Added prometheus metrics, healthcheck URL (/health by default), and custom 404 content (404.html by default).
-
+* v3: Return 404 for dodgy-looking requests.
+* v4: More dodgy-looking requests now get a 404.
+* v5: Return 404 for directory list requests. Added Apache-style request logging to stdout (enabled by default).

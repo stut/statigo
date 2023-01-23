@@ -1,21 +1,36 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+	"strconv"
+)
 
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode      int
 	notFoundContent []byte
 	notFoundSent    bool
+	metricsEnabled  bool
+	site            string
 }
 
-func NewResponseWriter(w http.ResponseWriter, notFound []byte) *responseWriter {
-	return &responseWriter{w, http.StatusOK, notFound, false}
+func NewResponseWriter(w http.ResponseWriter, notFound []byte, metricsEnabled bool, site string) *responseWriter {
+	return &responseWriter{
+		w,
+		http.StatusOK,
+		notFound,
+		false,
+		metricsEnabled,
+		site,
+	}
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
-	if code == 404 {
+	if rw.metricsEnabled {
+		responseStatus.WithLabelValues(rw.site, strconv.Itoa(code)).Inc()
+	}
+	if code == http.StatusNotFound {
 		rw.ResponseWriter.Header().Set("Content-Type", "text/html; charset=utf-8")
 		rw.notFoundSent = true
 	}

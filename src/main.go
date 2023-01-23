@@ -3,20 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"path"
-	"strconv"
-	"strings"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
-	VERSION        = 4
+	VERSION = 5
+
 	responseStatus = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "statigo_status_total",
@@ -37,7 +36,27 @@ var (
 	notFoundContent = []byte("<html><head><title>404 Not Found</title></head><body><h1>404 Not Found</h1><p><a href=\"/\">Go to the homepage &raquo;</a></p></body></html>")
 )
 
+func checkDirExists(rootDir string) error {
+	// Check the root dir exists and is accessible.
+	f, err := os.Open(rootDir)
+	if err != nil {
+		return fmt.Errorf("does not exist: %s", err)
+	}
+	defer func() { _ = f.Close() }()
+	var s fs.FileInfo
+	s, err = f.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get file info: %s", err)
+	}
+	if !s.IsDir() {
+		return fmt.Errorf("is not a directory")
+	}
+	return nil
+}
+
 func main() {
+	var err error
+
 	listenPort := os.Getenv("NOMAD_PORT_http")
 	if len(listenPort) == 0 {
 		listenPort = "3000"
@@ -46,18 +65,25 @@ func main() {
 	if len(site) == 0 {
 		site = "notset"
 	}
-
-	listenAddr := flag.String("listen-addr", fmt.Sprintf(":%s", listenPort),
-		"Address on which to listen for HTTP requests")
+	listenAddr := flag.String("listen-addr", fmt.Sprintf(":%s", listenPort), "Address on which to listen for HTTP requests")
 	rootDir := flag.String("root-dir", "./", "Root directory to serve files from")
+	indexFilename := flag.String("index-filename", "index.html", "Directory index filename")
 	noMetrics := flag.Bool("no-metrics", false, "Disable prometheus metrics")
 	healthUrl := flag.String("health-url", "/health", "Healthcheck URL")
 	metricsUrl := flag.String("metrics-url", "/metrics", "Prometheus metrics URL")
 	notFoundFilename := flag.String("not-found-filename", "404.html", "Page not found content filename")
+	disableApacheLogging := flag.Bool("no-request-logging", false, "Disable Apache request logging to stdout")
+
 	flag.Parse()
 
+	err = checkDirExists(*rootDir)
+	if err != nil {
+		log.Fatalf("Root directory %s", err)
+	}
+
 	// Read the 404 content. If reading fails the default content is used.
-	content, err := os.ReadFile(path.Join(*rootDir, *notFoundFilename))
+	var content []byte
+	content, err = os.ReadFile(path.Join(*rootDir, *notFoundFilename))
 	if err == nil {
 		notFoundContent = content
 	}
@@ -73,34 +99,13 @@ func main() {
 	}
 
 	// Static file server.
-	fileServer := http.FileServer(http.Dir(*rootDir))
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		// Handle attempts to get hidden and forbidden files and folders.
-		if strings.HasPrefix(req.URL.Path, "/.") || strings.Contains(req.URL.Path, "/..") {
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write(notFoundContent)
-			return
-		}
-
-		var timer *prometheus.Timer
-		var url string
-		if !*noMetrics {
-			url = req.URL.Path
-			timer = prometheus.NewTimer(httpDuration.WithLabelValues(site, url))
-		}
-
-		// This allows us to access to response code.
-		rw := NewResponseWriter(w, notFoundContent)
-		fileServer.ServeHTTP(rw, req)
-
-		if !*noMetrics {
-			responseStatus.WithLabelValues(site, strconv.Itoa(rw.statusCode)).Inc()
-			if rw.statusCode >= 200 && rw.statusCode <= 399 {
-				httpRequests.WithLabelValues(site, url).Inc()
-				timer.ObserveDuration()
-			}
-		}
-	})
+	var handler http.Handler
+	handler = CreateCustomHandler(site, !(*noMetrics),
+		http.FileServer(CreateFileSystemNoDirList(http.Dir(*rootDir), *indexFilename)))
+	if !(*disableApacheLogging) {
+		handler = NewApacheLoggingHandler(handler, os.Stdout)
+	}
+	http.Handle("/", handler)
 
 	log.Printf("Statigo v%d", VERSION)
 	log.Printf("  Site: %s", site)

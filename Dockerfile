@@ -7,7 +7,7 @@ RUN adduser -D scratchuser
 COPY go.* ./
 RUN go mod download
 
-COPY *.go ./
+COPY src/*.go ./
 
 RUN CGO_ENABLED=0 go build -o /statigo -ldflags="-s -w"
 
