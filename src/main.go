@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	VERSION = 6
+	VERSION = 7
 
 	responseStatus = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -100,11 +100,8 @@ func main() {
 
 	// Static file server.
 	var handler http.Handler
-	handler = CreateCustomHandler(site, !(*noMetrics),
+	handler = CreateCustomHandler(site, !(*noMetrics), !(*disableApacheLogging),
 		http.FileServer(CreateFileSystemNoDirList(http.Dir(*rootDir), *indexFilename)))
-	if !(*disableApacheLogging) {
-		handler = NewApacheLoggingHandler(handler, os.Stdout)
-	}
 	http.Handle("/", handler)
 
 	log.Printf("Statigo v%d", VERSION)

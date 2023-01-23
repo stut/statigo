@@ -8,6 +8,7 @@ import (
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode      int
+	bytesSent       uint64
 	notFoundContent []byte
 	notFoundSent    bool
 	metricsEnabled  bool
@@ -18,6 +19,7 @@ func NewResponseWriter(w http.ResponseWriter, notFound []byte, metricsEnabled bo
 	return &responseWriter{
 		w,
 		http.StatusOK,
+		0,
 		notFound,
 		false,
 		metricsEnabled,
@@ -38,8 +40,13 @@ func (rw *responseWriter) WriteHeader(code int) {
 }
 
 func (rw *responseWriter) Write(data []byte) (int, error) {
+	var err error
+	var written int
 	if rw.notFoundSent {
-		return rw.ResponseWriter.Write(rw.notFoundContent)
+		written, err = rw.ResponseWriter.Write(rw.notFoundContent)
+	} else {
+		written, err = rw.ResponseWriter.Write(data)
 	}
-	return rw.ResponseWriter.Write(data)
+	rw.bytesSent += uint64(written)
+	return written, err
 }

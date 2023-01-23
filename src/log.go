@@ -2,61 +2,26 @@ package main
 
 // 10 years old, no answer to the licensing question as of usage.
 // https://gist.github.com/cespare/3985516
+// With modifications by Stuart Dallas [2023-01-23].
 
 import (
 	"fmt"
-	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
 const (
-	ApacheFormatPattern = "%s - - [%s] \"%s %d %d\" %f\n"
+	// ip - - [datetime] "method url protocol" status bytes "referer" "user-agent"
+	ApacheFormatPattern = "%s - - [%s] \"%s\" %d %d \"%s\" \"%s\"\n"
 )
 
-type ApacheLogRecord struct {
-	http.ResponseWriter
-
-	ip                    string
-	time                  time.Time
-	method, uri, protocol string
-	status                int
-	responseBytes         int64
-	elapsedTime           time.Duration
-}
-
-func (r *ApacheLogRecord) Log(out io.Writer) {
-	timeFormatted := r.time.Format("02/Jan/2006 03:04:05")
-	requestLine := fmt.Sprintf("%s %s %s", r.method, r.uri, r.protocol)
-	_, _ = fmt.Fprintf(out, ApacheFormatPattern, r.ip, timeFormatted, requestLine, r.status, r.responseBytes,
-		r.elapsedTime.Seconds())
-}
-
-func (r *ApacheLogRecord) Write(p []byte) (int, error) {
-	written, err := r.ResponseWriter.Write(p)
-	r.responseBytes += int64(written)
-	return written, err
-}
-
-func (r *ApacheLogRecord) WriteHeader(status int) {
-	r.status = status
-	r.ResponseWriter.WriteHeader(status)
-}
-
-type ApacheLoggingHandler struct {
-	handler http.Handler
-	out     io.Writer
-}
-
-func NewApacheLoggingHandler(handler http.Handler, out io.Writer) http.Handler {
-	return &ApacheLoggingHandler{
-		handler: handler,
-		out:     out,
+func (handler *CustomHandler) logRequest(r *http.Request, rw *responseWriter) {
+	if !handler.requestLogEnabled {
+		return
 	}
-}
 
-func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	clientIP := r.Header.Get("X-Forwarded-For")
 	if len(clientIP) == 0 {
 		clientIP = r.RemoteAddr
@@ -69,23 +34,12 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 		}
 	}
 
-	record := &ApacheLogRecord{
-		ResponseWriter: rw,
-		ip:             clientIP,
-		time:           time.Time{},
-		method:         r.Method,
-		uri:            r.RequestURI,
-		protocol:       r.Proto,
-		status:         http.StatusOK,
-		elapsedTime:    time.Duration(0),
-	}
-
-	startTime := time.Now()
-	h.handler.ServeHTTP(record, r)
-	finishTime := time.Now()
-
-	record.time = finishTime.UTC()
-	record.elapsedTime = finishTime.Sub(startTime)
-
-	record.Log(h.out)
+	_, _ = fmt.Fprintf(os.Stdout, ApacheFormatPattern,
+		clientIP,
+		time.Now().Format("02/Jan/2006 03:04:05"),
+		strings.ReplaceAll(fmt.Sprintf("%s %s %s", r.Method, r.RequestURI, r.Proto), "\"", "\\\""),
+		rw.statusCode,
+		rw.bytesSent,
+		strings.ReplaceAll(r.Header.Get("Referer"), "\"", "\\\""),
+		strings.ReplaceAll(r.Header.Get("User-Agent"), "\"", "\\\""))
 }

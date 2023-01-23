@@ -6,16 +6,18 @@ import (
 )
 
 type CustomHandler struct {
-	site           string
-	metricsEnabled bool
-	nextHandler    http.Handler
+	site              string
+	metricsEnabled    bool
+	requestLogEnabled bool
+	nextHandler       http.Handler
 }
 
-func CreateCustomHandler(site string, metricsEnabled bool, nextHandler http.Handler) CustomHandler {
+func CreateCustomHandler(site string, metricsEnabled bool, requestLogEnabled bool, nextHandler http.Handler) CustomHandler {
 	return CustomHandler{
-		site:           site,
-		metricsEnabled: metricsEnabled,
-		nextHandler:    nextHandler,
+		site:              site,
+		metricsEnabled:    metricsEnabled,
+		requestLogEnabled: requestLogEnabled,
+		nextHandler:       nextHandler,
 	}
 }
 
@@ -31,6 +33,8 @@ func (handler CustomHandler) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	rw := NewResponseWriter(w, notFoundContent, handler.metricsEnabled, handler.site)
 
 	handler.nextHandler.ServeHTTP(rw, req)
+
+	handler.logRequest(req, rw)
 
 	if handler.metricsEnabled {
 		if rw.statusCode >= 200 && rw.statusCode <= 399 {
