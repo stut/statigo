@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	VERSION = 5
+	VERSION = 6
 
 	responseStatus = promauto.NewCounterVec(
 		prometheus.CounterOpts{

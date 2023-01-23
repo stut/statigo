@@ -29,7 +29,7 @@ type ApacheLogRecord struct {
 func (r *ApacheLogRecord) Log(out io.Writer) {
 	timeFormatted := r.time.Format("02/Jan/2006 03:04:05")
 	requestLine := fmt.Sprintf("%s %s %s", r.method, r.uri, r.protocol)
-	fmt.Fprintf(out, ApacheFormatPattern, r.ip, timeFormatted, requestLine, r.status, r.responseBytes,
+	_, _ = fmt.Fprintf(out, ApacheFormatPattern, r.ip, timeFormatted, requestLine, r.status, r.responseBytes,
 		r.elapsedTime.Seconds())
 }
 
@@ -57,9 +57,16 @@ func NewApacheLoggingHandler(handler http.Handler, out io.Writer) http.Handler {
 }
 
 func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	clientIP := r.RemoteAddr
-	if colon := strings.LastIndex(clientIP, ":"); colon != -1 {
-		clientIP = clientIP[:colon]
+	clientIP := r.Header.Get("X-Forwarded-For")
+	if len(clientIP) == 0 {
+		clientIP = r.RemoteAddr
+		if colon := strings.LastIndex(clientIP, ":"); colon != -1 {
+			clientIP = clientIP[:colon]
+		}
+	} else {
+		if strings.Contains(clientIP, ",") {
+			clientIP = strings.Split(clientIP, ",")[0]
+		}
 	}
 
 	record := &ApacheLogRecord{
