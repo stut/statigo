@@ -26,7 +26,7 @@ func (handler CustomHandler) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	url := ""
 	if handler.metricsEnabled {
 		url = req.URL.Path
-		timer = prometheus.NewTimer(httpDuration.WithLabelValues(handler.site, url))
+		timer = prometheus.NewTimer(httpDuration.WithLabelValues(handler.site))
 	}
 
 	// This allows us to mark a metric for the response code.

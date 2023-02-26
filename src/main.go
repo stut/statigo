@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	VERSION = 7
+	VERSION = 8
 
 	responseStatus = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -32,7 +32,7 @@ var (
 	httpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "statigo_response_time_seconds",
 		Help: "Duration of HTTP requests.",
-	}, []string{"site", "path"})
+	}, []string{"site"})
 	notFoundContent = []byte("<html><head><title>404 Not Found</title></head><body><h1>404 Not Found</h1><p><a href=\"/\">Go to the homepage &raquo;</a></p></body></html>")
 )
 
@@ -73,6 +73,7 @@ func main() {
 	metricsUrl := flag.String("metrics-url", "/metrics", "Prometheus metrics URL")
 	notFoundFilename := flag.String("not-found-filename", "404.html", "Page not found content filename")
 	disableApacheLogging := flag.Bool("no-request-logging", false, "Disable Apache request logging to stdout")
+	serveHidden := flag.Bool("serve-hidden", false, "Enable serving hidden files and folders")
 
 	flag.Parse()
 
@@ -101,7 +102,7 @@ func main() {
 	// Static file server.
 	var handler http.Handler
 	handler = CreateCustomHandler(site, !(*noMetrics), !(*disableApacheLogging),
-		http.FileServer(CreateFileSystemNoDirList(http.Dir(*rootDir), *indexFilename)))
+		http.FileServer(CreateFileSystemNoDirList(http.Dir(*rootDir), *indexFilename, *serveHidden)))
 	http.Handle("/", handler)
 
 	log.Printf("Statigo v%d", VERSION)
