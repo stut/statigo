@@ -6,6 +6,8 @@ As features grow it is getting bigger but the goal is still to keep it as small 
 
 Docker images available on DockerHub: https://hub.docker.com/r/stut/statigo
 
+For a React site or similar web application set `--not-found-filename index.html` on the command line.
+
 Iterations:
 
 * v1: Basic static HTTP server.
